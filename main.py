@@ -11,10 +11,9 @@ EMAIL_USER = os.environ["EMAIL_USER"]
 EMAIL_PASS = os.environ["EMAIL_PASSWORD"]
 
 # 2. CONFIGURATION
-# We use a multi-reddit URL to scan all subs at once
 TARGET_URL = "https://www.reddit.com/r/Entrepreneur+freelance+marketing+solopreneur/new.json?limit=50"
 KEYWORDS = ["tax", "irs", "penalty", "safe harbor", "burnout", "overwhelmed", "drowning", "contract", "legal", "client"]
-HEAT_THRESHOLD = 5  # Minimum comments
+HEAT_THRESHOLD = 5 
 TIME_LIMIT_HOURS = 24
 
 def send_email(posts):
@@ -42,12 +41,21 @@ def send_email(posts):
 def run_scout():
     print("🕵️ Scout is waking up...")
     
-    # Custom User-Agent is REQUIRED to avoid being blocked
-    headers = {'User-Agent': 'Mozilla/5.0 (compatible; VampireScout/1.0; +http://creatoraiplaybook.co)'}
+    # THE FIX: Mimic a real Chrome Browser on a Mac
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
+    }
     
     try:
+        # We try fetching OLD reddit JSON first, it's often less protected
         response = requests.get(TARGET_URL, headers=headers)
-        if response.status_code != 200:
+        
+        if response.status_code == 403:
+            print("❌ Reddit blocked the request (403). They detected the server IP.")
+            return
+        elif response.status_code != 200:
             print(f"❌ Error fetching Reddit data: {response.status_code}")
             return
             
@@ -58,17 +66,14 @@ def run_scout():
         for p in posts:
             post = p['data']
             
-            # 1. Keyword Check
             title_text = post['title'].lower()
             self_text = post.get('selftext', '').lower()
             if not any(k in title_text or k in self_text for k in KEYWORDS):
                 continue
 
-            # 2. Heat Check
             if post['num_comments'] < HEAT_THRESHOLD:
                 continue
 
-            # 3. Time Check
             created_time = datetime.datetime.fromtimestamp(post['created_utc'])
             age = datetime.datetime.now() - created_time
             if age.total_seconds() > (TIME_LIMIT_HOURS * 3600):
